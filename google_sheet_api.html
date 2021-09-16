@@ -1,0 +1,312 @@
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/1.12.2/jquery.min.js"></script>
+
+
+<!-- <div class="ui-a" title="구글엑셀시트">https://docs.google.com/spreadsheets/d/1R-8M7lQjmAWr7Lliku57e9FU-Kjcofu2mNiLU3pkmFs/edit#gid=0</div><br>
+<div class="ui-a" title="jsonp파일">https://docs.google.com/spreadsheets/d/1R-8M7lQjmAWr7Lliku57e9FU-Kjcofu2mNiLU3pkmFs/gviz/tq?</div><br> -->
+<div class="ui-a" title="구글엑셀시트">https://docs.google.com/spreadsheets/d/1FYiiOKsJXJH56BBUnmJKAhN6AYQhFOgQIlysCTBEAi4/edit#gid=767835822</div><br>
+<script>
+	$('.ui-a').each(function(){
+		let text =  $(this).text()
+		$(this).replaceWith( '<a href="'+ text +'" target="_blank">'+ text +'</a>');
+	})
+</script>
+<br>
+
+
+<div>
+	<select id="action">
+		<option hide-input="rowId">insert</option>
+		<option show-input="*">update</option>
+		<option show-input="rowId">delete</option>
+		<option>retrieve</option>
+	</select>
+	<label for="rowId">rowId</label><input type="number" id="rowId" name="rowId" value="27">
+	<label for="name">이름</label><input type="text" id="name" name="name">
+	<label for="age">나이</label><input type="number" id="age" name="age" min="1">
+	<label for="area">사는곳</label><input type="text" id="area" name="area">
+	<button id="google-submit">입력</button>
+</div>
+<div id="snackbar"></div>
+
+<input type="search" id="input1" value="" style="width: 700px;" list="dl_1" />
+<datalist id="dl_1">
+	<option>SELECT * WHERE C > 25 and C < 100 ORDER BY C DESC</option>
+</datalist>
+<button id="search-google-btn">검색</button>
+<div id="showData"></div>
+
+
+<style>
+html.wait *,html.wait,body.wait *,body.wait{cursor:progress !important;}
+#snackbar{visibility:hidden; min-width:250px; margin-left:-125px; background-color:#333; color:#fff; text-align:center; border-radius:2px; padding:16px; position:fixed; z-index:1; left:50%; bottom:30px; font-size:17px; }
+#snackbar.show{visibility:visible; -webkit-animation:fadein 0.5s,fadeout 0.5s 2.5s; animation:fadein 0.5s,fadeout 0.5s 2.5s; }
+@-webkit-keyframes fadein{ from{bottom:0; opacity:0; } to{bottom:30px; opacity:1; } }
+@keyframes fadein{ from{bottom:0; opacity:0; } to{bottom:30px; opacity:1; } }
+@-webkit-keyframes fadeout{ from{bottom:30px; opacity:1; } to{bottom:0; opacity:0; } }
+@keyframes fadeout{ from{bottom:30px; opacity:1; } to{bottom:0; opacity:0; } }
+</style>
+
+<script>
+
+
+	$('.ui-a').each(function(){
+		let text =  $(this).text()
+		$(this).replaceWith( '<a href="'+ text +'" target="_blank">'+ text +'</a>');
+	})
+
+
+
+	//API
+	//https://developers.google.com/apps-script/guides/services/quotas
+	//https://developers.google.com/apps-script/reference/spreadsheet
+
+
+	//----------------------------insert 
+	//google excel:   https://docs.google.com/spreadsheets/d/1R-8M7lQjmAWr7Lliku57e9FU-Kjcofu2mNiLU3pkmFs/edit#gid=0
+	// let url= "https://script.google.com/macros/s/AKfycbwiHDc2dHHsppLBV9K6RuwWqqFAfkuqtRBMkcIOxo-ph6YP3PEw/exec";
+	// let url2 = 'https://docs.google.com/spreadsheets/d/1R-8M7lQjmAWr7Lliku57e9FU-Kjcofu2mNiLU3pkmFs/gviz/tq?';
+	
+	//[google excel] https://docs.google.com/spreadsheets/d/1FYiiOKsJXJH56BBUnmJKAhN6AYQhFOgQIlysCTBEAi4/edit#gid=767835822
+	// let url= "https://script.google.com/macros/s/AKfycbz8eKI3R5XdnNrmYg1Rq3TlBYoL-wEkIcOLssWweWGxjjuLGUZvd7R9jhZAD7F-6eQO/exec"; //배포용
+	let url= "https://script.google.com/macros/s/AKfycbxI4oKX5OM69xQVUX28pZMEQLHm9YAqa99arMRHRLw/dev"; //개발용(create,update,del)
+	let url2 = 'https://docs.google.com/spreadsheets/d/1FYiiOKsJXJH56BBUnmJKAhN6AYQhFOgQIlysCTBEAi4/gviz/tq?'; //검색
+	//[관리자 GS코드]  https://script.google.com/home/projects/16TfRpPWCvjUbkHmjteeLZj49vJy8puPCZ4V5cqtrxKt_kFEohNrcADue/edit
+	//[관리자 로그]   https://script.google.com/home/projects/16TfRpPWCvjUbkHmjteeLZj49vJy8puPCZ4V5cqtrxKt_kFEohNrcADue/executions
+
+
+	function isLoading(status) {
+		var googleSubmitBtn = $('#google-submit');
+		if (status) {
+			$('html, body').addClass('wait');
+			googleSubmitBtn.attr('disabled', true).html('입력중...');
+		} else {
+			$('html, body').removeClass('wait');
+			googleSubmitBtn.attr('disabled', false).html('입력');
+		}
+	}
+
+	function checkInput() {
+		var isEmpty = false;
+		var inputs = $('input[type="text"]');
+		$.each(inputs, function (index, element) {
+			if (element.value === '') {
+				alert('빈 칸이 있어요.');
+				isEmpty = true;
+				return false;
+			}
+		});
+		return isEmpty;
+	}
+
+	$('#google-submit').click(function () {
+		// if (checkInput()) { return; }//빈값 체크
+		isLoading(true);// 입력중..
+
+		var snackbar = $('#snackbar');
+		var rowId = $('#rowId');
+		var inputName = $('#name');
+		var inputAge = $('#age');
+		var inputArea = $('#area');
+
+		$.ajax({
+			type: "GET",
+			url: url, 
+			data: {
+				// "spreadsheetId": 'AKfycbxI4oKX5OM69xQVUX28pZMEQLHm9YAqa99arMRHRLw',
+				// "sheetName": "시트1",
+				"action": $('#action option:selected').val(),
+				"rowId": rowId.val(),
+				"ID": rowId.val(),
+				"이름": inputName.val(),
+				"나이": inputAge.val(),
+				"사는곳": inputArea.val()
+			},
+			success: function (response) {
+				isLoading(false);
+				console.log(response)
+
+				snackbar.html('입력이 완료됐습니다.').addClass('show');
+				setTimeout(function () {
+					snackbar.removeClass('show');
+				}, 3000);
+
+				//값 비워주기
+				// rowId.val('');
+				// inputName.val('');
+				// inputAge.val('');
+				// inputArea.val('');
+			},
+			error: function (request, status, error) {
+				console.log(request)
+				isLoading(false);
+				console.log("code:" + request.status + "\n" + "error:" + error);
+				console.log(request.responseText);
+			}
+		});
+	});
+
+
+
+
+	//----------------------
+
+
+
+	var jsonp = function (url) {
+		var script = window.document.createElement('script');
+		script.async = true;
+		script.src = url;
+		script.onerror = function () {
+			alert('Can not access JSONP file.')
+		};
+		var done = false;
+		script.onload = script.onreadystatechange = function () {
+			if (!done && (!this.readyState || this.readyState === 'loaded' || this.readyState === 'complete')) {
+				done = true;
+				script.onload = script.onreadystatechange = null;
+				if (script.parentNode) {
+					return script.parentNode.removeChild(script);
+				}
+			}
+		};
+		window.document.getElementsByTagName('head')[0].appendChild(script);
+	};
+
+	var parse = function (data) {
+		let column_length = data.table.cols.length;
+		if (!column_length || !data.table.rows.length) return false;
+		let columns = [];
+		let rs = [];
+		for (var column_idx in data.table.cols) {
+			columns.push(data.table.cols[column_idx].label);
+		}
+		console.log(columns)
+		for (var i in data.table.rows) {
+			let row = data.table.rows[i]['c'];
+			let row_length = row.length;
+			// if (column_length != row_length) return false;
+			// console.log(row_length, row)
+			for (var j in row) {
+				if (!rs[i]) rs[i] = {};
+				console.log(row[j])
+				if(row[j] != null){
+					if (typeof row[j].f !== 'undefined' && typeof row[j].v !== 'undefined') rs[i][columns[j]] = row[j].f;
+					else if(typeof row[j]['v'] != 'undefined') rs[i][columns[j]] = row[j]['v'];
+					else  rs[i][columns[j]] = null;
+				}
+				else rs[i][columns[j]] = null;
+			}
+		}
+		return rs;
+	};
+
+	var query = function (sql, sheetName, callback) {
+		let url = url2;
+		let params = {
+			tq: encodeURIComponent(sql),
+			sheet: encodeURIComponent(sheetName),
+			tqx: 'responseHandler:' + callback
+		};
+		let qs = [];
+		for (var key in params) {
+			qs.push(key + '=' + params[key]);
+		}
+		url += qs.join('&');
+		return jsonp(url); // Call JSONP helper function
+	}
+
+	var my_callback = function (data) {
+		console.log(data)
+		data = parse(data); // Call data parser helper function
+
+		//AND THEN WHATEVER YOU WANT 
+		for (var i = 0; i < datas.length; i++) {
+			if (JSON.stringify(datas[i]) == JSON.stringify(data)) {
+				return false;
+			}
+		}
+
+		datas.push(data);
+
+		// EXTRACT VALUE FOR HTML HEADER. 
+		var col = [];
+		for (var i = 0; i < data.length; i++) {
+			for (var key in data[i]) {
+				// console.log(col.indexOf(key))
+				if (col.indexOf(key) === -1) {
+					col.push(key);
+				}
+			}
+		}
+		var table = document.querySelector("#showData table");
+		if (table === null || table == undefined) {
+			// CREATE DYNAMIC TABLE.
+			table = document.createElement("table");
+
+			// CREATE HTML TABLE HEADER ROW USING THE EXTRACTED HEADERS ABOVE.
+			var tr = table.insertRow(-1); // TABLE ROW.
+			for (var i = 0; i < col.length; i++) {
+				var th = document.createElement("th"); // TABLE HEADER.
+				th.innerHTML = col[i];
+				tr.appendChild(th);
+			}
+
+			// ADD JSON DATA TO THE TABLE AS ROWS.
+			for (var i = 0; i < data.length; i++) {
+				tr = table.insertRow(-1);
+				for (var j = 0; j < col.length; j++) {
+					var tabCell = tr.insertCell(-1);
+					tabCell.innerHTML = data[i][col[j]];
+				}
+			}
+
+			// FINALLY ADD THE NEWLY CREATED TABLE WITH JSON DATA TO A CONTAINER.
+			var divContainer = document.getElementById("showData");
+			divContainer.innerHTML = "";
+			divContainer.appendChild(table);
+		} else {
+
+			// ADD JSON DATA TO THE TABLE AS ROWS.
+			for (var i = 0; i < data.length; i++) {
+				var tr = table.insertRow();
+				for (var j = 0; j < col.length; j++) {
+					var tabCell = tr.insertCell(-1);
+					tabCell.innerHTML = data[i][col[j]];
+				}
+			}
+		}
+
+	}
+
+	var datas = [];
+
+	$('#search-google-btn').click(function () {
+		$('#showData').html('');
+		datas = [];
+		// query('', '시트1', 'my_callback');
+		// query('SELECT * WHERE B > 25 and B<100 ORDER BY B DESC', '시트1', 'my_callback');
+		query(document.querySelector('#input1').value, '시트1', 'my_callback');
+		
+	});
+
+
+//--------------select
+// https://kutar37.tistory.com/entry/%EA%B5%AC%EA%B8%80-%EC%8A%A4%ED%94%84%EB%A0%88%EB%93%9C%EC%8B%9C%ED%8A%B8-API-%ED%99%9C%EC%9A%A9%ED%95%98%EA%B8%B0-SELECT
+// https://developers.google.com/chart/interactive/docs/querylanguage
+// https://docs.google.com/spreadsheets/d/1R-8M7lQjmAWr7Lliku57e9FU-Kjcofu2mNiLU3pkmFs/gviz/tq?
+
+// select			// Selects which columns to return, and in what order. If omitted, all of the table's columns are returned, in their default order.
+// where			// Returns only rows that match a condition. If omitted, all rows are returned.
+// group by		// Aggregates values across rows.
+// pivot			// Transforms distinct values in columns into new columns.
+// order by		// Sorts rows by values in columns.
+// limit			// Limits the number of returned rows.
+// offset			// Skips a given number of first rows.
+// label			// Sets column labels.
+// format			// Formats the values in certain columns using given formatting patterns.
+// options		//Sets additional options.
+// from				// The from clause has been eliminated from the language.
+
+
+
+</script>
